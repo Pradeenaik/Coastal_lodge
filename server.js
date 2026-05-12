@@ -10,7 +10,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      "https://coastal-lodge-frontend.vercel.app/",
+      "https://coastal-lodge-frontend.vercel.app",
     ],
     credentials: true,
   })
