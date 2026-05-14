@@ -9,7 +9,7 @@ const app = express();
 app.use(
   cors({
     origin: [
-      "http://localhost:5173",
+      "http://localhost:3000",
       "https://coastal-lodge-frontend.vercel.app",
     ],
     credentials: true,
@@ -197,6 +197,150 @@ app.get("/api/summary", verifyToken, async (req, res) => {
     error: err.message,
   });
 }}); 
+
+app.get("/api/analytics", verifyToken, async (req, res) => {
+  try {
+    const days = await Day.find().sort({ date: 1 });
+
+    if (!days.length) {
+      return res.json({
+        monthlyRevenue: [],
+        weeklyRevenue: [],
+        dailyTrend: [],
+        stats: {
+          totalRevenue: 0,
+          totalCommission: 0,
+          totalNetProfit: 0,
+          averageDailyRevenue: 0,
+          bestRevenueDay: null,
+          totalDays: 0,
+        },
+      });
+    }
+
+    // Monthly Revenue
+    const monthlyMap = {};
+
+    days.forEach((day) => {
+      const d = new Date(day.date);
+
+      const month = d.toLocaleString("default", {
+        month: "short",
+      });
+
+      if (!monthlyMap[month]) {
+        monthlyMap[month] = 0;
+      }
+
+      monthlyMap[month] += day.totalAmount || 0;
+    });
+
+    const monthlyRevenue = Object.entries(monthlyMap).map(
+      ([month, total]) => ({
+        month,
+        total,
+      })
+    );
+
+    // Weekly Revenue
+    const weeklyRevenue = [];
+
+    for (let i = 0; i < days.length; i += 7) {
+      const weekDays = days.slice(i, i + 7);
+
+      const total = weekDays.reduce(
+        (sum, day) => sum + (day.totalAmount || 0),
+        0
+      );
+
+      weeklyRevenue.push({
+        week: `Week ${Math.floor(i / 7) + 1}`,
+        total,
+      });
+    }
+
+    // Daily Trend
+    const dailyTrend = days.map((day) => ({
+      date: day.date,
+      revenue: day.totalAmount || 0,
+      commission: day.totalCommission || 0,
+      net: day.netTotal || 0,
+    }));
+
+    // Stats
+    const totalRevenue = days.reduce(
+      (sum, day) => sum + (day.totalAmount || 0),
+      0
+    );
+
+    const totalCommission = days.reduce(
+      (sum, day) => sum + (day.totalCommission || 0),
+      0
+    );
+
+    const totalNetProfit = days.reduce(
+      (sum, day) => sum + (day.netTotal || 0),
+      0
+    );
+
+    const averageDailyRevenue = Math.round(
+      totalRevenue / days.length
+    );
+
+    const bestRevenueDay = days.reduce((best, current) =>
+      current.totalAmount > best.totalAmount
+        ? current
+        : best
+    );
+
+    const lowestRevenueDay = days.reduce((lowest, current) =>
+  current.totalAmount < lowest.totalAmount
+    ? current
+    : lowest
+);
+
+const highestCommissionDay = days.reduce((highest, current) =>
+  current.totalCommission > highest.totalCommission
+    ? current
+    : highest
+);
+
+    res.json({
+      monthlyRevenue,
+      weeklyRevenue,
+      dailyTrend,
+      stats: {
+        totalRevenue,
+        totalCommission,
+        totalNetProfit,
+        averageDailyRevenue,
+        bestRevenueDay: {
+          date: bestRevenueDay.date,
+          amount: bestRevenueDay.totalAmount,
+        },
+
+        lowestRevenueDay: {
+          date: lowestRevenueDay.date,
+          amount: lowestRevenueDay.totalAmount,
+        },
+
+        highestCommissionDay: {
+          date: highestCommissionDay.date,
+          amount: highestCommissionDay.totalCommission,
+        },
+
+        totalDays: days.length,
+      },
+    });
+
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+});
 
 
 app.delete("/api/history", verifyToken, async (req, res) => {
